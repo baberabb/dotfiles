@@ -1,0 +1,4 @@
+# Only *.age ciphertext belongs in this public repo.
+key.txt
+*.plain
+.idea

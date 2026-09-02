@@ -1,0 +1,14 @@
+{{- $machine := "other" -}}
+{{- if eq .chezmoi.os "darwin" }}{{ $machine = "mac" }}{{ end -}}
+{{- if eq .chezmoi.hostname "baberpc" }}{{ $machine = "homepc" }}{{ end -}}
+
+{{- if ne $machine "other" }}
+encryption = "age"
+[age]
+    identity = "~/.config/chezmoi/key.txt"
+    recipient = "age1z7s5064mfq77dal0gn69e9hh65tu3p73gqzmqz52al5c2aq06f0sj5lylv"
+
+{{- end }}
+# Gates the encrypted_ sources (currently ~/.zsh/private.zsh) via .chezmoiignore.
+[data]
+    machine = {{ $machine | quote }}

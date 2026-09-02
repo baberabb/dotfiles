@@ -1,0 +1,258 @@
+#!/usr/bin/env zsh
+
+# =====================================================
+# ZSH CONFIGURATION
+# =====================================================
+
+# Performance Debugging (uncomment to enable)
+# if [ -n "${ZSH_DEBUGRC+1}" ]; then
+#     zprof
+# fi
+
+# =====================================================
+# TERMINAL SETTINGS
+# =====================================================
+
+export EDITOR=micro
+export VISUAL=micro
+# export CLAUDE_CODE_EFFORT_LEVEL=max
+export HOMEBREW_NO_ENV_HINTS=1
+
+# col -bx strips mandoc's backspace-overstriking; bat can't render it
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+export MANROFFOPT="-c"
+alias -g -- -h='-h 2>&1 | bat --language=help --style=plain --paging=never'
+alias -g -- --help='--help 2>&1 | bat --language=help --style=plain --paging=never'
+
+# =====================================================
+# HISTORY
+# =====================================================
+
+HISTSIZE=20000
+HISTFILE=~/.zsh_history
+SAVEHIST=$HISTSIZE
+
+setopt appendhistory
+setopt sharehistory
+setopt hist_ignore_space
+setopt hist_ignore_all_dups
+setopt hist_save_no_dups
+setopt hist_find_no_dups
+
+# Don't save commands longer than 500 characters, or ones naming these tools
+# (to exclude more, extend the alternation)
+zshaddhistory() {
+  [[ ${#1} -le 500 && $1 != *(torrent-files|rd_add.py)* ]]
+}
+
+# =====================================================
+# SHELL OPTIONS
+# =====================================================
+
+setopt autocd extendedglob notify
+
+# =====================================================
+# KEYBINDINGS
+# =====================================================
+
+bindkey -e
+bindkey "^[[1;3D" backward-word
+bindkey "^[[1;3C" forward-word
+bindkey "^[[1;3A" history-beginning-search-backward
+bindkey "^[[1;3B" history-beginning-search-forward
+
+# Secrets (API keys, tokens) — keep out of version control
+[ -f ~/.zsh/secrets.zsh ] && source ~/.zsh/secrets.zsh
+
+# =====================================================
+# ZINIT (plugin manager)
+# =====================================================
+
+ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
+[ ! -d "$ZINIT_HOME" ] && mkdir -p "$(dirname "$ZINIT_HOME")"
+[ ! -d "$ZINIT_HOME/.git" ] && git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"
+source "${ZINIT_HOME}/zinit.zsh"
+
+# Plugins that must load BEFORE compinit:
+#   - zsh-completions ships completion files; compinit scans $fpath only once,
+#     so loading it later means none of its completions are ever registered.
+#   - compdef calls from plugins are captured by zinit's compdef shim here and
+#     replayed by `zinit cdreplay -q` once the real compdef exists.
+zinit light zsh-users/zsh-completions
+zinit snippet OMZP::sudo
+
+# =====================================================
+# COMPLETION SYSTEM
+# =====================================================
+
+autoload -Uz compinit && compinit
+zinit cdreplay -q   # run the compdef calls queued above
+
+# Private machine-specific settings, aliases, and functions.
+# Must stay AFTER compinit: it calls compdef, which compinit defines.
+[ -f ~/.zsh/private.zsh ] && source ~/.zsh/private.zsh
+
+# Completion styling
+# macOS never sets LS_COLORS (BSD ls uses LSCOLORS), so list-colors below had
+# nothing to read and completion menus came out uncolored. Define it here --
+# GNU ls on homepc picks it up too. Values are the dircolors defaults.
+export LS_COLORS='di=1;34:ln=1;36:mh=00:pi=40;33:so=1;35:do=1;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=00:tw=30;42:ow=34;42:st=37;44:ex=1;32'
+
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+# fzf-tab needs a descriptions format to expose completion groups; without it
+# the `switch-group` binding below has no groups to switch between.
+zstyle ':completion:*:descriptions' format '[%d]'
+# Don't re-sort git branches -- git already returns them most-recent-first.
+zstyle ':completion:*:git-checkout:*' sort false
+# Suppress zsh's own menu so fzf-tab can capture the unambiguous prefix.
+zstyle ':completion:*' menu no
+
+# fzf-tab settings
+zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza --color=always --icons=always -- "$realpath"'
+zstyle ':fzf-tab:complete:__zoxide_z:*' fzf-preview 'eza --color=always --icons=always -- "$realpath"'
+zstyle ':fzf-tab:*' fzf-flags --height=50% --border --preview-window=right:50%
+zstyle ':fzf-tab:*' switch-group '<' '>'
+
+# =====================================================
+# ZINIT PLUGINS (must load after compinit)
+# =====================================================
+
+# fzf-tab replaces the completion widget that compinit installs, so it loads
+# after compinit -- but before anything that wraps widgets.
+zinit light Aloxaf/fzf-tab
+
+# Widget wrappers, after fzf-tab.
+zinit light zsh-users/zsh-autosuggestions
+zinit light hlissner/zsh-autopair
+# zinit light birdhackor/zsh-eza-ls-plugin
+
+# Autosuggestions config (must be after plugin loads)
+ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
+ZSH_AUTOSUGGEST_HISTORY_IGNORE='(llms *|llm *|torrent-files *|python* rd_add.py)'
+
+# =====================================================
+# CLI TOOL INTEGRATIONS (installed via Homebrew)
+# =====================================================
+
+# FZF integration
+command -v fzf >/dev/null && source <(fzf --zsh)
+
+# thefuck command correction
+command -v thefuck >/dev/null && eval "$(thefuck --alias)"
+
+# Zoxide (better cd) — must be after compinit
+command -v zoxide >/dev/null && eval "$(zoxide init --cmd cd zsh)"
+
+# =====================================================
+# PATH MANAGEMENT
+# =====================================================
+
+# Ensure virtual environment bin directory is prioritized
+if [[ -n $VIRTUAL_ENV ]]; then
+    export PATH="$VIRTUAL_ENV/bin:$PATH"
+fi
+
+# Rust / uv environment
+[[ -f "$HOME/.local/bin/env" ]] && . "$HOME/.local/bin/env"
+
+# =====================================================
+# COMPLETIONS
+# =====================================================
+
+[ -s "/Users/baber/.bun/_bun" ] && source "/Users/baber/.bun/_bun"
+
+
+# =====================================================
+# EZA
+# =====================================================
+eza_params=('--git' '--icons' '--classify' '--group-directories-first' '--time-style=long-iso' '--group' '--color-scale')
+alias lz='eza ${eza_params}'
+alias la='eza -lbhHigUmuSa'
+alias lx='eza -lbhHigUmuSa@'
+
+
+# =====================================================
+# ALIASES
+# =====================================================
+
+alias pip='python -m pip'
+alias gsm='git switch main'
+alias gs-='git switch -'
+alias nano=micro
+alias prv='noglob _prv'
+_prv() { gh pv ${1:+"${1#\#}"} "${@:2}"; }
+
+if command -v brew >/dev/null 2>&1 && command -v uv >/dev/null 2>&1; then
+    alias upgx='brew upgrade && uv tool upgrade --all'
+fi
+
+# =====================================================
+# FUNCTIONS
+# =====================================================
+
+cl() { claude -p "$*"; }
+
+# Yazi with cwd-on-exit
+function y() {
+    local tmp="$(mktemp -t "yazi-cwd.XXXXXX")" cwd
+    command yazi "$@" --cwd-file="$tmp"
+    IFS= read -r -d '' cwd < "$tmp"
+    [ -n "$cwd" ] && [ "$cwd" != "$PWD" ] && builtin cd -- "$cwd"
+    rm -f -- "$tmp"
+}
+
+[ -f ~/.zsh/download.zsh ] && source ~/.zsh/download.zsh
+
+# =====================================================
+# Linux ONLY
+# =====================================================
+
+# Linuxbrew
+if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+# systemd user ssh-agent
+if [[ -n "$XDG_RUNTIME_DIR" && -S "$XDG_RUNTIME_DIR/ssh-agent.socket" ]]; then
+    export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/ssh-agent.socket"
+fi
+
+# CUDA
+if [[ -d /usr/local/cuda ]]; then
+    export CUDA_HOME=/usr/local/cuda
+    export PATH="$CUDA_HOME/bin:$PATH"
+    export LD_LIBRARY_PATH="$CUDA_HOME/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+# SELinux relabel helper
+if command -v restorecon >/dev/null 2>&1; then
+    alias restc='restorecon -Rv'
+fi
+
+
+# =====================================================
+# MACOS / MACBOOK ONLY
+# =====================================================
+
+if [[ "$OSTYPE" == darwin* ]]; then
+    alias keyed='cat ~/.ssh/id_ed25519.pub | pbcopy && echo "ED25519 key copied to clipboard!"'
+    alias stt='subl .'
+
+    # Open with Sublime Text; fall back to micro if subl is unavailable.
+    st() { subl "$@" || micro "$@"; }
+fi
+
+# =====================================================
+# STARSHIP PROMPT
+# =====================================================
+
+# Starship prompt
+command -v starship >/dev/null && eval "$(starship init zsh)"
+
+# =====================================================
+# SYNTAX HIGHLIGHTING (must be loaded LAST)
+# =====================================================
+
+zinit light zsh-users/zsh-syntax-highlighting
+export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"

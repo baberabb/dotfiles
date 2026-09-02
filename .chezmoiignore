@@ -1,0 +1,7 @@
+{{ if eq .machine "other" -}}
+# Glob, not a bare name: with encryption unconfigured chezmoi can't strip the
+# .age suffix, so the target is .zsh/private.zsh.tmpl.age, not .zsh/private.zsh.
+.zsh/private.zsh*
+{{- end }}
+key.txt.age
+setup.sh
