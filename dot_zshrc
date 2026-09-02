@@ -202,6 +202,15 @@ function y() {
     rm -f -- "$tmp"
 }
 
+install_vllm() {
+    local version="${1:-0.28.0}"
+    local cuda="${2:-cu129}"
+    uv pip install "vllm==${version}" \
+        --extra-index-url "https://wheels.vllm.ai/${version}/${cuda}" \
+        --extra-index-url "https://download.pytorch.org/whl/${cuda}" \
+        --index-strategy unsafe-best-match
+}
+
 [ -f ~/.zsh/download.zsh ] && source ~/.zsh/download.zsh
 
 # =====================================================
@@ -256,3 +265,6 @@ command -v starship >/dev/null && eval "$(starship init zsh)"
 
 zinit light zsh-users/zsh-syntax-highlighting
 export PATH="/opt/homebrew/opt/openjdk/bin:$PATH"
+
+
+
